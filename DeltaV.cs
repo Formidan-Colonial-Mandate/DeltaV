@@ -151,13 +151,22 @@ lcdHudSize=0.8
 
     lcd.CustomData = string.Join("\n", customLines);
 
-    var cockpits = new List<IMyShipController>();
-    GridTerminalSystem.GetBlocksOfType(cockpits, c => c.CubeGrid == Me.CubeGrid);
-    controller = cockpits.FirstOrDefault(c => c.CustomName.ToLower().Contains("deltavcockpit"))
-              ?? cockpits.FirstOrDefault(c => c.IsUnderControl)
-              ?? cockpits.FirstOrDefault(c => c.IsMainCockpit);
+   var cockpits = new List<IMyShipController>();
+GridTerminalSystem.GetBlocksOfType(cockpits, c =>
+    c.CubeGrid == Me.CubeGrid && c.CanControlShip);
+controller = cockpits.FirstOrDefault(c => c.CustomName.ToLower().Contains("deltavcockpit"));
+if (controller == null)
+    controller = cockpits.FirstOrDefault(c => c.IsUnderControl);
+if (controller == null)
+    controller = cockpits.FirstOrDefault(c => c.IsMainCockpit);
+if (controller == null && cockpits.Count > 0)
+    controller = cockpits[0];
+if (controller == null)
+{
+    throw new Exception("No valid cockpit found.\n\n" +
+        "To fix: Place a Cockpit on the grid oriented in your preferred direction.");
+}
 
-    if (controller == null) throw new Exception("No valid cockpit found.");
 
     GridTerminalSystem.GetBlocksOfType(allThrusters, t => t.IsFunctional && t.CubeGrid == Me.CubeGrid);
     GridTerminalSystem.GetBlocksOfType(tanks, t => t.IsFunctional && t.CubeGrid == Me.CubeGrid && t.DefinitionDisplayNameText.ToLower().Contains("hydrogen"));
@@ -319,16 +328,30 @@ void Main(string arg, UpdateType updateSource) {
                 hasThruster = true;
             }
 
-            if (!hasThruster || thrust <= 0 || fuelLps <= 0)
+            if (!hasThruster || thrust <= 0 || fuelLps <= 0) continue;
+
+            double totalFuelLps = 0;
+            foreach (var t in allThrusters)
             {
-                string skipLine = $" {name,-13} │ {"N/a",9}      ";
-                sb.AppendLine(PadSides(skipLine, boxWidth, showBorders ? '║' : ' '));
+                string subtype = t.BlockDefinition.SubtypeName;
+                double lps;
+                if (!fuelUsageLpsBySubtypeId.TryGetValue(subtype, out lps)) continue;
+                if (rcsSubtypes.Contains(subtype) && !includeRCS) continue;
+                totalFuelLps += lps;
+            }
+            if (totalFuelLps <= 0) continue;
+
+            double groupFuelMass = fuelMass * (fuelLps / totalFuelLps);
+            double groupMf = m0 - groupFuelMass;
+            if (groupMf <= 0 || m0 <= 0 || groupMf >= m0)
+            {
+                string unavailableLine = $" {name,-13} │ unavailable     ";
+                sb.AppendLine(PadSides(unavailableLine, boxWidth, showBorders ? '║' : ' '));
                 continue;
             }
 
             double ve = thrust / (fuelLps * HYDROGEN_DENSITY_KG_PER_L);
-            double dv = ve * Math.Log(m0 / mf);
-
+            double dv = ve * Math.Log(m0 / groupMf);
             string groupLine = $" {name,-13} │ {dv,9:N0} m/s ";
             sb.AppendLine(PadSides(groupLine, boxWidth, showBorders ? '║' : ' '));
         }
@@ -338,8 +361,6 @@ void Main(string arg, UpdateType updateSource) {
         sb.AppendLine(PadCenter("No groups defined in PB CustomData", boxWidth, showBorders ? '║' : ' '));
     }
     if (showBorders) sb.AppendLine(midLine);
-
-
 
     // Only show Burn Times if displayBurnTimes is ON
     if (displayBurnTimes) {
