@@ -340,6 +340,7 @@ void Main(string arg, UpdateType updateSource) {
     if (showBorders) sb.AppendLine(midLine);
 
 
+
     // Only show Burn Times if displayBurnTimes is ON
     if (displayBurnTimes) {
         sb.AppendLine(PadCenter("Burn Times (sec):", boxWidth, showBorders ? '║' : ' '));
