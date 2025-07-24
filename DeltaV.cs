@@ -41,6 +41,11 @@ bool includeRCS = true;
 bool displayBurnTimes = true;
 bool showAllDirections = true;
 
+// Boot animation
+bool booting = true;
+string bootMsg = "Gathering the courage to hate on the poor";
+int bootFrame = 0; // just dont touch it
+
 IMyTextPanel lcd;
 IMyShipController controller;
 List<IMyThrust> allThrusters = new List<IMyThrust>();
@@ -261,6 +266,47 @@ void Main(string arg, UpdateType updateSource) {
             statusLog.AppendLine($"[Toggle] All Directions: {(showAllDirections ? "ON" : "OFF")}");
             Save();
             break;
+    }
+
+    // Boot animation logic
+    if (booting)
+    {
+        int boxBootWidth = 34;
+        int barLen = 24;
+        int filled = (int)Math.Round((double)bootFrame / 5 * barLen);
+        string bar = "[" + new string('#', filled) + new string('-', barLen - filled) + "]";
+        var bootSb = new StringBuilder();
+        bootSb.AppendLine();
+        bootSb.AppendLine(PadCenter("ΔV HUD", boxBootWidth, ' '));
+        bootSb.AppendLine();
+
+        // Split bootMsg into lines if too long
+        int maxLen = boxBootWidth - 2;
+        List<string> bootMsgLines = new List<string>();
+        string msg = bootMsg;
+        while (msg.Length > maxLen)
+        {
+            int splitAt = msg.LastIndexOf(' ', maxLen);
+            if (splitAt <= 0) splitAt = maxLen;
+            bootMsgLines.Add(msg.Substring(0, splitAt));
+            msg = msg.Substring(splitAt).TrimStart();
+        }
+        bootMsgLines.Add(msg);
+
+        foreach (var line in bootMsgLines)
+            bootSb.AppendLine(PadCenter(line, boxBootWidth, ' '));
+
+        bootSb.AppendLine();
+        bootSb.AppendLine(PadCenter(bar, boxBootWidth, ' '));
+        bootSb.AppendLine();
+        lcd.WriteText(bootSb.ToString());
+
+        bootFrame++;
+        if (bootFrame >= 5)
+        {
+            booting = false;
+        }
+        return;
     }
 
     var mass = controller.CalculateShipMass();
