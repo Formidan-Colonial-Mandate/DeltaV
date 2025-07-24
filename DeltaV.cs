@@ -319,30 +319,16 @@ void Main(string arg, UpdateType updateSource) {
                 hasThruster = true;
             }
 
-            if (!hasThruster || thrust <= 0 || fuelLps <= 0) continue;
-
-            double totalFuelLps = 0;
-            foreach (var t in allThrusters)
+            if (!hasThruster || thrust <= 0 || fuelLps <= 0)
             {
-                string subtype = t.BlockDefinition.SubtypeName;
-                double lps;
-                if (!fuelUsageLpsBySubtypeId.TryGetValue(subtype, out lps)) continue;
-                if (rcsSubtypes.Contains(subtype) && !includeRCS) continue;
-                totalFuelLps += lps;
-            }
-            if (totalFuelLps <= 0) continue;
-
-            double groupFuelMass = fuelMass * (fuelLps / totalFuelLps);
-            double groupMf = m0 - groupFuelMass;
-            if (groupMf <= 0 || m0 <= 0 || groupMf >= m0)
-            {
-                string unavailableLine = $" {name,-13} │ unavailable     ";
-                sb.AppendLine(PadSides(unavailableLine, boxWidth, showBorders ? '║' : ' '));
+                string skipLine = $" {name,-13} │ {"N/a",9}      ";
+                sb.AppendLine(PadSides(skipLine, boxWidth, showBorders ? '║' : ' '));
                 continue;
             }
 
             double ve = thrust / (fuelLps * HYDROGEN_DENSITY_KG_PER_L);
-            double dv = ve * Math.Log(m0 / groupMf);
+            double dv = ve * Math.Log(m0 / mf);
+
             string groupLine = $" {name,-13} │ {dv,9:N0} m/s ";
             sb.AppendLine(PadSides(groupLine, boxWidth, showBorders ? '║' : ' '));
         }
@@ -352,6 +338,7 @@ void Main(string arg, UpdateType updateSource) {
         sb.AppendLine(PadCenter("No groups defined in PB CustomData", boxWidth, showBorders ? '║' : ' '));
     }
     if (showBorders) sb.AppendLine(midLine);
+
 
     // Only show Burn Times if displayBurnTimes is ON
     if (displayBurnTimes) {
