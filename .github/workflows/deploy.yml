@@ -1,0 +1,28 @@
+name: Deploy DeltaV to Steam Workshop
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: [self-hosted]
+
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@v3
+
+    - name: Minify Script
+      run: |
+        mkdir -p dist
+        python3 minify.py DeltaV.cs dist/DeltaV.min.cs
+
+    - name: Copy workshop_build.vdf
+      run: |
+        cp workshop_build.vdf dist/
+
+    - name: Upload to Steam Workshop via SteamCMD (cached session)
+      run: |
+        cd ~/steamcmd
+        ./steamcmd.sh +workshop_build_item $GITHUB_WORKSPACE/dist/workshop_build.vdf +quit
