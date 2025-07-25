@@ -12,9 +12,9 @@ def minify_script(code):
         parts[i] = re.sub(r'\\s+', ' ', parts[i])
     return ''.join(parts)
 
-if __name__ == \"__main__\":
+if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print(\"Usage: python minify.py input.cs output.cs\")
+        print("Usage: python minify.py input.cs output.cs")
         sys.exit(1)
     with open(sys.argv[1], 'r') as infile:
         original = infile.read()
