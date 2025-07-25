@@ -25,4 +25,4 @@ jobs:
     - name: Upload to Steam Workshop via SteamCMD (cached session)
       run: |
         cd ~/steamcmd
-        ./steamcmd.sh +workshop_build_item $GITHUB_WORKSPACE/dist/workshop_build.vdf +quit
+        ./steamcmd.sh +runscript ~/steamcmd/login.txt
