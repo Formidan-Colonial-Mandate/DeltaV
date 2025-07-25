@@ -20,38 +20,78 @@ burntime                - Toggle display of burn times
 all, alldirections      - Toggle all-direction vs forward-only
 */
 
+// ========== Globals (deduplicated & cleaned) ==========
+
+IMyShipController controller;
+IMyTextPanel lcd;
+List<IMyGasTank> tanks = new List<IMyGasTank>();
+List<IMyThrust> allThrusters = new List<IMyThrust>();
+List<IMyBlockGroup> allGroups = new List<IMyBlockGroup>();
+
+List<string> groupNames = new List<string>();
+StringBuilder statusLog = new StringBuilder();
+
+// Constants
 const double HYDROGEN_DENSITY_KG_PER_L = 0.01;
 
-// --Defaults--
-// Delta-V
-List<string> groupNames = new List<string> { "All Drives", "Boost", "Efficient", "Braking" };
-// LCD
-string HUDLCD_TOPRIGHT_TEMPLATE = "hudlcd:0.60:0.98:{0}";
-string HUDLCD_TOPLEFT_TEMPLATE  = "hudlcd:-0.95:0.95:{0}";
-string lcdColor = "225,225,225"; // Default white
-string lcdFont = "Monospace";    // Default font
-string lcdName = "DeltaV"; // Name to include on the LCD panel
-bool showBorders = true; // Add this global variable
-bool showHeaderAndSettings = true;
-string hudPosition = "topright"; // topright or topleft
-string lcdHudSize = "0.8"; // Default HUD size for hudlcd line
-
 // Runtime settings
+bool showBorders = true;
+bool showHeaderAndSettings = true;
 bool includeRCS = true;
 bool displayBurnTimes = true;
 bool showAllDirections = true;
+bool fastBoot = true;
 
-// Boot animation
+// LCD configuration
+string hudPosition = "topright";
+string lcdHudSize = "0.8";
+string lcdColor = "225,225,225";
+string lcdFont = "Monospace";
+string lcdName = "DeltaV";
+string HUDLCD_TOPRIGHT_TEMPLATE = "hudlcd:0.60:0.98:{0}";
+string HUDLCD_TOPLEFT_TEMPLATE  = "hudlcd:-0.95:0.95:{0}";
+
+// Boot
 bool booting = true;
-string bootMsg = "Gathering the courage to hate on the poor";
-int bootFrame = 0; // just dont touch it
+int bootFrame = 0;
+int bootTickCounter = 0;
+const int BOOT_TICKS_PER_FRAME = 5; // 10 ticks × 5 = ~50 ticks
+readonly string[] bootSpinner = new[] { "|", "/", "-", "\\" };
+readonly string[] bootSteps = new[] {
+    "Boot sequence initialized",
+    "Loading HUD modules",
+    "Validating LCD interface",
+    "Linking cockpit controller",
+    "Calculating fuel reserves",
+    "Analyzing thruster config",
+    "Generating burn tables",
+    "Arming on-board explosives",
+    "Checking for valid EnCorp software license",
+    "License confirmed.",
+    "Disarming on-board explosives",
+    "Gathering the courage to hate the poor",
+    "Launching ΔV HUD"
+};
 
-IMyTextPanel lcd;
-IMyShipController controller;
-List<IMyThrust> allThrusters = new List<IMyThrust>();
-List<IMyGasTank> tanks = new List<IMyGasTank>();
-List<IMyBlockGroup> allGroups = new List<IMyBlockGroup>();
-StringBuilder statusLog = new StringBuilder();
+readonly int[] bootStepDurations = new[] {
+    1, 1, 1, 1, 1, 1, 1, // 0–6
+    3, // "Arming Explosives"
+    2, // "Checking for valid license"
+    1, // "license confirmed"
+    3, // "disarming explosives"
+    2, // "courage to hate"
+    1 // "activating DeltaV"  
+};
+
+int bootStepFrameCounter = 0;
+
+bool GetMassStats(out double m0, out double mf, out double fuelMass) {
+    var mass = controller.CalculateShipMass();
+    m0 = mass.TotalMass;
+    fuelMass = tanks.Sum(t => t.Capacity * t.FilledRatio * HYDROGEN_DENSITY_KG_PER_L);
+    mf = m0 - fuelMass;
+    return !(mf <= 0 || m0 <= 0 || mf >= m0);
+}
 
 HashSet<string> rcsSubtypes = new HashSet<string>(new[]
     { "LynxRcsThruster1", "AryxRCSRamp", "AryxRCSHalfRamp", "AryxRCSSlant", "AryxRCS", "RCS2Bare", "RCS2Cube",
@@ -73,35 +113,36 @@ Dictionary<string, double> fuelUsageLpsBySubtypeId = new Dictionary<string, doub
     {"RCS21x2Slope2", 227.27}
 };
 
+
 public Program() {
-    Runtime.UpdateFrequency = UpdateFrequency.Update100;
+    Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
     // If PB CustomData is empty, set the template
     if (string.IsNullOrWhiteSpace(Me.CustomData)) {
         Me.CustomData =
-@"DeltaV Settings
-groups=All Drives,Boost,Efficient,Braking
-------- AnyGroupName seperated by Comma --------
+        @"DeltaV Settings
+        groups=All Drives,Boost,Efficient,Braking
+        ------- AnyGroupName seperated by Comma --------
 
-Hud Settings
-hudPosition=topright
------ topright, topleft ------
+        Hud Settings
+        hudPosition=topright
+        ----- topright, topleft ------
 
-showHeaderAndSettings=true
------ true, false -------------
+        showHeaderAndSettings=true
+        ----- true, false -------------
 
-lcdColor=225,225,225
------ R,G,B ---------------------
+        lcdColor=225,225,225
+        ----- R,G,B ---------------------
 
-lcdFont=Monospace
------- Monospace, Debug ----
+        lcdFont=Monospace
+        ------ Monospace, Debug ----
 
-showBorders=true
------- false, true --------
+        showBorders=true
+        ------ false, true --------
 
-lcdHudSize=0.8
------- LCD Size (0.5 - 2.0) ------
-";
+        lcdHudSize=0.8
+        ------ LCD Size (0.5 - 2.0) ------
+        ";
     }
 
     // Parse config from programmable block CustomData
@@ -141,21 +182,7 @@ lcdHudSize=0.8
         }
     }
 
-    // Ensure hudlcd: line is present and matches script's hudPosition
-    string desiredHudLine = (hudPosition == "topleft" ? HUDLCD_TOPLEFT_TEMPLATE : HUDLCD_TOPRIGHT_TEMPLATE);
-    var customLines = lcd.CustomData.Split('\n').ToList();
-    int hudLineIndex = customLines.FindIndex(l => l.Trim().ToLower().StartsWith("hudlcd:"));
-
-    if (hudLineIndex >= 0) {
-        if (customLines[hudLineIndex].Trim() != desiredHudLine.Trim()) {
-            customLines[hudLineIndex] = desiredHudLine;
-        }
-    } else {
-        customLines.Insert(0, desiredHudLine);
-    }
-
-    lcd.CustomData = string.Join("\n", customLines);
-
+    
    var cockpits = new List<IMyShipController>();
 GridTerminalSystem.GetBlocksOfType(cockpits, c =>
     c.CubeGrid == Me.CubeGrid && c.CanControlShip);
@@ -185,61 +212,132 @@ if (controller == null)
     Echo($"Controller: {(controller != null ? controller.CustomName : "NOT FOUND")}");
 }
 
+
+void Main(string arg, UpdateType updateSource) {
+    if (lcd == null || !lcd.IsFunctional) return;
+
+    ParseConfig(Me.CustomData);
+    
+    // Refresh block groups at runtime to catch newly added or renamed groups
+    allGroups.Clear();
+    GridTerminalSystem.GetBlockGroups(allGroups);
+
+    UpdateHudLineIfChanged();
+    HandleToggleArguments(arg);
+
+   if (booting) {
+    if (RunBootAnimation()) return;
+    // Boot finished
+    Runtime.UpdateFrequency = UpdateFrequency.Update100;
+}
+
+    double m0, mf, fuelMass;
+    if (!GetMassStats(out m0, out mf, out fuelMass)) {
+        DisplayError("ΔV unavailable: invalid mass/fuel");
+        return;
+    }
+
+    var sb = new StringBuilder();
+    int boxWidth = 34;
+
+    if (showBorders) sb.AppendLine(GetBoxLine("top", boxWidth));
+    sb.AppendLine(PadCenter("ΔV HUD", boxWidth, showBorders ? '║' : ' '));
+    if (showBorders) sb.AppendLine(GetBoxLine("mid", boxWidth));
+
+    if (showHeaderAndSettings) AppendHeaderAndSettings(sb, boxWidth);
+    if (showBorders) sb.AppendLine(GetBoxLine("mid", boxWidth));
+
+    RenderDeltaVByGroup(sb, m0, fuelMass, boxWidth);
+
+    if (displayBurnTimes) {
+        if (showBorders) sb.AppendLine(GetBoxLine("sep", boxWidth));
+        RenderBurnTimes(sb, fuelMass, boxWidth);
+    }
+
+    if (showBorders) sb.AppendLine(GetBoxLine("bot", boxWidth));
+
+    AppendStatusLog(sb);
+    lcd.WriteText(sb.ToString());
+
+    if (!booting) {
+    string freq = Runtime.UpdateFrequency.HasFlag(UpdateFrequency.Update100) ? "Update100" :
+                  Runtime.UpdateFrequency.HasFlag(UpdateFrequency.Update10)  ? "Update10" :
+                  Runtime.UpdateFrequency.HasFlag(UpdateFrequency.Update1)   ? "Update1" :
+                  "Unknown";
+}
+}
+
+
+
 void Save() {
     Storage = $"{includeRCS};{displayBurnTimes};{showAllDirections}";
 }
 
 void ParseConfig(string customData) {
+    groupNames.Clear();
+
     var lines = customData.Split('\n');
     foreach (var line in lines) {
         var trimmed = line.Trim();
         if (trimmed.StartsWith("groups=", StringComparison.OrdinalIgnoreCase)) {
             var val = trimmed.Substring("groups=".Length);
-            groupNames = val.Split(',').Select(g => g.Trim()).Where(g => !string.IsNullOrEmpty(g)).ToList();
+            groupNames = val.Split(',')
+                            .Select(g => g.Trim())
+                            .Where(g => g.Length > 0)
+                            .ToList();
+            foreach (var g in groupNames) {
+            }
         } else if (trimmed.StartsWith("hudPosition=", StringComparison.OrdinalIgnoreCase)) {
             var val = trimmed.Substring("hudPosition=".Length).Trim().ToLower();
             if (val == "topleft" || val == "topright") hudPosition = val;
         } else if (trimmed.StartsWith("showHeaderAndSettings=", StringComparison.OrdinalIgnoreCase)) {
-            var val = trimmed.Substring("showHeaderAndSettings=".Length).Trim().ToLower();
-            showHeaderAndSettings = (val == "true" || val == "1" || val == "yes");
+            showHeaderAndSettings = trimmed.Substring("showHeaderAndSettings=".Length).Trim().ToLower() == "true";
         } else if (trimmed.StartsWith("lcdColor=", StringComparison.OrdinalIgnoreCase)) {
             lcdColor = trimmed.Substring("lcdColor=".Length).Trim();
         } else if (trimmed.StartsWith("lcdFont=", StringComparison.OrdinalIgnoreCase)) {
             lcdFont = trimmed.Substring("lcdFont=".Length).Trim();
         } else if (trimmed.StartsWith("showBorders=", StringComparison.OrdinalIgnoreCase)) {
-            var val = trimmed.Substring("showBorders=".Length).Trim().ToLower();
-            showBorders = (val == "true" || val == "1" || val == "yes");
+            showBorders = trimmed.Substring("showBorders=".Length).Trim().ToLower() == "true";
         } else if (trimmed.StartsWith("lcdHudSize=", StringComparison.OrdinalIgnoreCase)) {
             lcdHudSize = trimmed.Substring("lcdHudSize=".Length).Trim();
         }
     }
 }
 
-void Main(string arg, UpdateType updateSource) {
-    if (lcd == null || !lcd.IsFunctional) return;
+string PadCenter(string text, int width, char pad = ' ') {
+    text = text.Length > width - 2 ? text.Substring(0, width - 2) : text;
+    int padTotal = width - 2 - text.Length;
+    int padLeft = padTotal / 2;
+    int padRight = padTotal - padLeft;
+    return pad + new string(' ', padLeft) + text + new string(' ', padRight) + (pad == ' ' ? "" : pad.ToString());
+}
 
-    // Re-parse config in case CustomData changed
-    ParseConfig(Me.CustomData);
+string PadSides(string text, int width, char pad = ' ') {
+    text = text.Length > width - 2 ? text.Substring(0, width - 2) : text;
+    return pad + text.PadRight(width - 2) + (pad == ' ' ? "" : pad.ToString());
+}
 
-    // Build hudlcd line using configured size
-    string desiredHudLine = (hudPosition == "topleft"
-        ? string.Format(HUDLCD_TOPLEFT_TEMPLATE, lcdHudSize)
-        : string.Format(HUDLCD_TOPRIGHT_TEMPLATE, lcdHudSize));
+List<string> WrapLines(string input, int maxWidth) {
+    var lines = new List<string>();
+    string remaining = input;
 
-    var lines = lcd.CustomData.Split('\n').ToList();
-    int hudLineIndex = lines.FindIndex(l => l.Trim().ToLower().StartsWith("hudlcd:"));
-    if (hudLineIndex >= 0) {
-        if (lines[hudLineIndex].Trim() != desiredHudLine.Trim()) {
-            lines[hudLineIndex] = desiredHudLine;
-            lcd.CustomData = string.Join("\n", lines);
-        }
-    } else {
-        lines.Insert(0, desiredHudLine);
-        lcd.CustomData = string.Join("\n", lines);
+    while (remaining.Length > maxWidth) {
+        int split = remaining.LastIndexOf(' ', maxWidth);
+        if (split <= 0) split = maxWidth;
+        lines.Add(remaining.Substring(0, split).TrimEnd());
+        remaining = remaining.Substring(split).TrimStart();
     }
 
-    // Handle input arguments (accept multiple variants)
+    if (remaining.Length > 0)
+        lines.Add(remaining);
+
+    return lines;
+}
+
+
+void HandleToggleArguments(string arg) {
     string normalizedArg = (arg ?? "").Trim().ToLower();
+
     switch (normalizedArg) {
         case "rcs":
         case "rcstoggle":
@@ -248,6 +346,7 @@ void Main(string arg, UpdateType updateSource) {
             statusLog.AppendLine($"[Toggle] RCS: {(includeRCS ? "ON" : "OFF")}");
             Save();
             break;
+
         case "burn":
         case "time":
         case "burntime":
@@ -257,214 +356,226 @@ void Main(string arg, UpdateType updateSource) {
             statusLog.AppendLine($"[Toggle] Burn Times: {(displayBurnTimes ? "ON" : "OFF")}");
             Save();
             break;
+
         case "all":
         case "directions":
         case "alldirections":
         case "alldirectionstoggle":
         case "togglealldirections":
             showAllDirections = !showAllDirections;
-            statusLog.AppendLine($"[Toggle] All Directions: {(showAllDirections ? "ON" : "OFF")}");
+            statusLog.AppendLine($"[Toggle] All Directions: {(showAllDirections ? "ALL" : "FWD")}");
             Save();
             break;
     }
+}
 
-    // Boot animation logic
-    if (booting)
-    {
-        int boxBootWidth = 34;
-        int barLen = 24;
-        int filled = (int)Math.Round((double)bootFrame / 5 * barLen);
-        string bar = "[" + new string('#', filled) + new string('-', barLen - filled) + "]";
-        var bootSb = new StringBuilder();
-        bootSb.AppendLine();
-        bootSb.AppendLine(PadCenter("ΔV HUD", boxBootWidth, ' '));
-        bootSb.AppendLine();
+void UpdateHudLineIfChanged() {
+    string desiredHudLine = (hudPosition == "topleft"
+        ? string.Format(HUDLCD_TOPLEFT_TEMPLATE, lcdHudSize)
+        : string.Format(HUDLCD_TOPRIGHT_TEMPLATE, lcdHudSize));
 
-        // Split bootMsg into lines if too long
-        int maxLen = boxBootWidth - 2;
-        List<string> bootMsgLines = new List<string>();
-        string msg = bootMsg;
-        while (msg.Length > maxLen)
-        {
-            int splitAt = msg.LastIndexOf(' ', maxLen);
-            if (splitAt <= 0) splitAt = maxLen;
-            bootMsgLines.Add(msg.Substring(0, splitAt));
-            msg = msg.Substring(splitAt).TrimStart();
+    var lines = lcd.CustomData.Split('\n').ToList();
+    int hudLineIndex = lines.FindIndex(l => l.Trim().ToLower().StartsWith("hudlcd:"));
+
+    if (hudLineIndex >= 0) {
+        if (lines[hudLineIndex].Trim() != desiredHudLine.Trim()) {
+            lines[hudLineIndex] = desiredHudLine;
+            lcd.CustomData = string.Join("\n", lines);
         }
-        bootMsgLines.Add(msg);
+    } else {
+        lines.Insert(0, desiredHudLine);
+        lcd.CustomData = string.Join("\n", lines);
+    }
+}
 
-        foreach (var line in bootMsgLines)
-            bootSb.AppendLine(PadCenter(line, boxBootWidth, ' '));
+bool RunBootAnimation() {
+    if (!booting) return false;
 
-        bootSb.AppendLine();
-        bootSb.AppendLine(PadCenter(bar, boxBootWidth, ' '));
-        bootSb.AppendLine();
-        lcd.WriteText(bootSb.ToString());
+    // Throttle actual frame rate (manual Update50 simulation)
+    bootTickCounter++;
+    if (bootTickCounter < BOOT_TICKS_PER_FRAME) return true;
+    bootTickCounter = 0;
 
+    int boxBootWidth = 34;
+    int barLen = 24;
+
+    // Step index is tied to bootFrame
+    int stepIndex = Math.Min(bootFrame, bootSteps.Length - 1);
+
+    string step = bootSteps[stepIndex];
+    string spin = bootSpinner[bootFrame % bootSpinner.Length];
+
+    // Loading bar
+    int filled = Math.Min((bootFrame * barLen) / (bootSteps.Length + 2), barLen);
+    string bar = "[" + new string('#', filled) + new string('-', barLen - filled) + "]";
+
+    // Render
+    var bootSb = new StringBuilder();
+    bootSb.AppendLine();
+    bootSb.AppendLine(PadCenter("ΔV HUD", boxBootWidth, ' '));
+    bootSb.AppendLine();
+    bootSb.AppendLine(PadCenter(spin, boxBootWidth, ' '));
+    foreach (var line in WrapLines(step, boxBootWidth - 2))
+        bootSb.AppendLine(PadCenter(line, boxBootWidth, ' '));
+    bootSb.AppendLine();
+    bootSb.AppendLine(PadCenter(bar, boxBootWidth, ' '));
+    bootSb.AppendLine();
+
+    lcd.WriteText(bootSb.ToString());
+
+    // Advance boot frame only when duration is met
+    bootStepFrameCounter++;
+    if (bootStepFrameCounter >= bootStepDurations[Math.Min(stepIndex, bootStepDurations.Length - 1)]) {
+        bootStepFrameCounter = 0;
         bootFrame++;
-        if (bootFrame >= 5)
-        {
-            booting = false;
-        }
+    }
+
+    if (bootFrame >= bootSteps.Length + 3) {
+        booting = false;
+        fastBoot = false;
+        Runtime.UpdateFrequency = UpdateFrequency.Update100;
+    }
+
+    return true;
+}
+
+
+
+
+void RenderDeltaVByGroup(StringBuilder sb, double m0, double fuelMass, int boxWidth) {
+    if (showBorders) sb.AppendLine(GetBoxLine("sep", boxWidth));
+
+    if (groupNames.Count == 0) {
+        sb.AppendLine(PadCenter("No groups defined in PB CustomData", boxWidth, showBorders ? '║' : ' '));
         return;
     }
 
-    var mass = controller.CalculateShipMass();
-    double m0 = mass.TotalMass;
-    double fuelMass = tanks.Sum(t => t.Capacity * t.FilledRatio * HYDROGEN_DENSITY_KG_PER_L);
+    sb.AppendLine(PadCenter("ΔV by Group:", boxWidth, showBorders ? '║' : ' '));
+
     double mf = m0 - fuelMass;
-
-    var sb = new StringBuilder();
-    int boxWidth = 34;
-    string topLine = showBorders ? "╔" + new string('═', boxWidth - 2) + "╗" : "";
-    string midLine = showBorders ? "╠" + new string('═', boxWidth - 2) + "╣" : "";
-    string sepLine = showBorders ? "╟" + new string('─', 15) + "┬" + new string('─', 15) + "╢" : "";
-    string botLine = showBorders ? "╚" + new string('═', boxWidth - 2) + "╝" : "";
-
-    if (showBorders) sb.AppendLine(topLine);
-    sb.AppendLine(PadCenter("ΔV HUD", boxWidth, showBorders ? '║' : ' '));
-    if (showBorders) sb.AppendLine(midLine);
-    if (showHeaderAndSettings) {
-        string header = $"RCS: {(includeRCS ? "ON" : "OFF"),-3}  Burn: {(displayBurnTimes ? "ON" : "OFF"),-3}  Dir: {(showAllDirections ? "ALL" : "FWD"),-3}";
-        sb.AppendLine(PadCenter(header, boxWidth, showBorders ? '║' : ' '));
-        if (showBorders) sb.AppendLine(midLine);
-    }
     if (mf <= 0 || m0 <= 0 || mf >= m0) {
         sb.AppendLine(PadCenter("ΔV unavailable: invalid mass/fuel", boxWidth, showBorders ? '║' : ' '));
-        if (showBorders) sb.AppendLine(botLine);
-        lcd.WriteText(sb.ToString());
         return;
     }
 
-    // Show Delta-V by Group regardless of displayBurnTimes
-    if (showBorders)
-        sb.AppendLine(sepLine);
-
-    if (groupNames.Count > 0)
-    {
-        sb.AppendLine(PadCenter("ΔV by Group:", boxWidth, showBorders ? '║' : ' '));
-
-        foreach (var name in groupNames)
-        {
-            var group = allGroups.FirstOrDefault(g => g.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            if (group == null)
-            {
-                string naLine = $" {name,-13} │ {"N/a",9}      ";
-                sb.AppendLine(PadSides(naLine, boxWidth, showBorders ? '║' : ' '));
-                continue;
-            }
-
-            var blocks = new List<IMyTerminalBlock>();
-            group.GetBlocks(blocks);
-            double thrust = 0, fuelLps = 0;
-            bool hasThruster = false;
-
-            foreach (var block in blocks)
-            {
-                var thruster = block as IMyThrust;
-                if (thruster == null) continue;
-
-                string subtype = thruster.BlockDefinition.SubtypeName;
-                double lps;
-                if (!fuelUsageLpsBySubtypeId.TryGetValue(subtype, out lps)) continue;
-                if (rcsSubtypes.Contains(subtype) && !includeRCS) continue;
-
-                thrust += thruster.MaxEffectiveThrust;
-                fuelLps += lps;
-                hasThruster = true;
-            }
-
-            if (!hasThruster || thrust <= 0 || fuelLps <= 0) continue;
-
-            double totalFuelLps = 0;
-            foreach (var t in allThrusters)
-            {
-                string subtype = t.BlockDefinition.SubtypeName;
-                double lps;
-                if (!fuelUsageLpsBySubtypeId.TryGetValue(subtype, out lps)) continue;
-                if (rcsSubtypes.Contains(subtype) && !includeRCS) continue;
-                totalFuelLps += lps;
-            }
-            if (totalFuelLps <= 0) continue;
-
-            double groupFuelMass = fuelMass * (fuelLps / totalFuelLps);
-            double groupMf = m0 - groupFuelMass;
-            if (groupMf <= 0 || m0 <= 0 || groupMf >= m0)
-            {
-                string unavailableLine = $" {name,-13} │ unavailable     ";
-                sb.AppendLine(PadSides(unavailableLine, boxWidth, showBorders ? '║' : ' '));
-                continue;
-            }
-
-            double ve = thrust / (fuelLps * HYDROGEN_DENSITY_KG_PER_L);
-            double dv = ve * Math.Log(m0 / groupMf);
-            string groupLine = $" {name,-13} │ {dv,9:N0} m/s ";
-            sb.AppendLine(PadSides(groupLine, boxWidth, showBorders ? '║' : ' '));
-        }
-    }
-    else
-    {
-        sb.AppendLine(PadCenter("No groups defined in PB CustomData", boxWidth, showBorders ? '║' : ' '));
-    }
-    if (showBorders) sb.AppendLine(midLine);
-
-    // Only show Burn Times if displayBurnTimes is ON
-    if (displayBurnTimes) {
-        sb.AppendLine(PadCenter("Burn Times (sec):", boxWidth, showBorders ? '║' : ' '));
-        if (showBorders) sb.AppendLine(sepLine);
-
-        var thrustByDir = new Dictionary<Base6Directions.Direction, double>();
-        var fuelByDir = new Dictionary<Base6Directions.Direction, double>();
-        foreach (Base6Directions.Direction dir in Enum.GetValues(typeof(Base6Directions.Direction))) {
-            thrustByDir[dir] = 0;
-            fuelByDir[dir] = 0;
+    foreach (var name in groupNames) {
+        var group = allGroups.FirstOrDefault(g => g.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (group == null) {
+            string naLine = $" {name,-13} │ {"N/a",9}      ";
+            sb.AppendLine(PadSides(naLine, boxWidth, showBorders ? '║' : ' '));
+            continue;
         }
 
-        foreach (var thruster in allThrusters) {
+        var blocks = new List<IMyTerminalBlock>();
+        group.GetBlocks(blocks);
+        double thrust = 0, fuelLps = 0;
+        bool hasThruster = false;
+
+        foreach (var block in blocks) {
+            var thruster = block as IMyThrust;
+            if (thruster == null) continue;
+
             string subtype = thruster.BlockDefinition.SubtypeName;
             double lps;
             if (!fuelUsageLpsBySubtypeId.TryGetValue(subtype, out lps)) continue;
             if (rcsSubtypes.Contains(subtype) && !includeRCS) continue;
 
-            var dir = Base6Directions.GetFlippedDirection(thruster.Orientation.Forward);
-            if (!showAllDirections && dir != controller.Orientation.Forward) continue;
-
-            thrustByDir[dir] += thruster.MaxEffectiveThrust;
-            fuelByDir[dir] += lps;
+            thrust += thruster.MaxEffectiveThrust;
+            fuelLps += lps;
+            hasThruster = true;
         }
 
-        foreach (var kvp in fuelByDir) {
-            if (kvp.Value <= 0) continue;
-            double burn = fuelMass / (kvp.Value * HYDROGEN_DENSITY_KG_PER_L);
-            string burnLine = $" {kvp.Key,-13} │ {burn,9:N0} sec ";
-            sb.AppendLine(PadSides(burnLine, boxWidth, showBorders ? '║' : ' '));
+        if (!hasThruster || thrust <= 0 || fuelLps <= 0) {
+            string skipLine = $" {name,-13} │ {"N/a",9}      ";
+            sb.AppendLine(PadSides(skipLine, boxWidth, showBorders ? '║' : ' '));
+            continue;
         }
-        if (showBorders) sb.AppendLine(botLine);
-    } else {
-        if (showBorders) sb.AppendLine(botLine);
+
+        double ve = thrust / (fuelLps * HYDROGEN_DENSITY_KG_PER_L);
+        double dv = ve * Math.Log(m0 / mf);
+
+        string groupLine = $" {name,-13} │ {dv,9:N0} m/s ";
+        sb.AppendLine(PadSides(groupLine, boxWidth, showBorders ? '║' : ' '));
     }
 
-    if (statusLog.Length > 0) {
-        sb.AppendLine();
-        sb.Append("[Status]\n");
-        sb.Append(statusLog.ToString());
-        statusLog.Clear();
+    if (showBorders) sb.AppendLine(GetBoxLine("mid", boxWidth));
+}
+
+
+void RenderBurnTimes(StringBuilder sb, double fuelMass, int boxWidth) {
+    sb.AppendLine(PadCenter("Burn Times (sec):", boxWidth, showBorders ? '║' : ' '));
+    if (showBorders) sb.AppendLine(GetBoxLine("sep", boxWidth));
+
+    var thrustByDir = new Dictionary<Base6Directions.Direction, double>();
+    var fuelByDir = new Dictionary<Base6Directions.Direction, double>();
+
+    foreach (Base6Directions.Direction dir in Enum.GetValues(typeof(Base6Directions.Direction))) {
+        thrustByDir[dir] = 0;
+        fuelByDir[dir] = 0;
     }
 
+    foreach (var thruster in allThrusters) {
+        if (!thruster.Enabled) continue;
+        
+        string subtype = thruster.BlockDefinition.SubtypeName;
+        double lps;
+        if (!fuelUsageLpsBySubtypeId.TryGetValue(subtype, out lps)) continue;
+        if (rcsSubtypes.Contains(subtype) && !includeRCS) continue;
+
+        var dir = Base6Directions.GetFlippedDirection(thruster.Orientation.Forward);
+        if (!showAllDirections && dir != controller.Orientation.Forward) continue;
+
+        thrustByDir[dir] += thruster.MaxEffectiveThrust;
+        fuelByDir[dir] += lps;
+    }
+
+    foreach (var kvp in fuelByDir) {
+        if (kvp.Value <= 0) continue;
+        double burn = fuelMass / (kvp.Value * HYDROGEN_DENSITY_KG_PER_L);
+        string burnLine = $" {kvp.Key,-13} │ {burn,9:N0} sec ";
+        sb.AppendLine(PadSides(burnLine, boxWidth, showBorders ? '║' : ' '));
+    }
+}
+
+void AppendStatusLog(StringBuilder sb) {
+    if (statusLog.Length == 0) return;
+    sb.AppendLine();
+    sb.Append("[Status]\n");
+    sb.Append(statusLog.ToString());
+    statusLog.Clear();
+}
+
+void DisplayError(string message) {
+    var sb = new StringBuilder();
+    int boxWidth = 34;
+    if (showBorders) sb.AppendLine(GetBoxLine("top", boxWidth));
+    sb.AppendLine(PadCenter("ΔV HUD", boxWidth, showBorders ? '║' : ' '));
+    if (showBorders) sb.AppendLine(GetBoxLine("mid", boxWidth));
+    sb.AppendLine(PadCenter(message, boxWidth, showBorders ? '║' : ' '));
+    if (showBorders) sb.AppendLine(GetBoxLine("bot", boxWidth));
     lcd.WriteText(sb.ToString());
 }
 
-// Helper to pad a line with spaces and add left/right box chars
-string PadSides(string text, int width, char boxChar) {
-    text = text.Length > width - 2 ? text.Substring(0, width - 2) : text;
-    return boxChar + text.PadRight(width - 2, ' ') + (boxChar == ' ' ? "" : boxChar.ToString());
+string GetBoxLine(string type, int width) {
+    switch (type.ToLower()) {
+        case "top":
+            return "╔" + new string('═', width - 2) + "╗";
+        case "mid":
+            return "╠" + new string('═', width - 2) + "╣";
+        case "sep":
+            int innerWidth = width - 3;
+            int split = innerWidth / 2;
+            int remainder = innerWidth % 2;
+            return "╟" + new string('─', split) + "┬" + new string('─', split + remainder) + "╢";
+
+        case "bot":
+            return "╚" + new string('═', width - 2) + "╝";
+        default:
+            return new string(' ', width);
+    }
 }
 
-// Helper to center text in box and add left/right box chars
-string PadCenter(string text, int width, char boxChar) {
-    text = text.Length > width - 2 ? text.Substring(0, width - 2) : text;
-    int pad = width - 2 - text.Length;
-    int padLeft = pad / 2;
-    int padRight = pad - padLeft;
-    return boxChar + new string(' ', padLeft) + text + new string(' ', padRight) + (boxChar == ' ' ? "" : boxChar.ToString());
+void AppendHeaderAndSettings(StringBuilder sb, int boxWidth) {
+    string header = $"RCS: {(includeRCS ? "ON" : "OFF"),-3}  Burn: {(displayBurnTimes ? "ON" : "OFF"),-3}  Dir: {(showAllDirections ? "ALL" : "FWD"),-3}";
+    sb.AppendLine(PadCenter(header, boxWidth, showBorders ? '║' : ' '));
 }
