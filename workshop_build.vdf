@@ -2,6 +2,6 @@
 {
     "appid" "244850"
     "publishedfileid" "3531572919"
-    "contentfolder" "dist"
+    "contentfolder" "/home/snek/ci-pipeline/actions-runner/_work/DeltaV/DeltaV/dist"
     "changenote" "Auto-upload from GitHub Actions"
 }
