@@ -1,7 +1,7 @@
-"workshopitem"
+\"workshopitem\"
 {
-    "appid" "244850"
-    "publishedfileid" "3531572919"
+    \"appid\"            \"244850\"
+    \"publishedfileid\"  \"3531572919\"
     "contentfolder" "/home/snek/ci-pipeline/actions-runner/_work/DeltaV/DeltaV/dist"
-    "changenote" "Auto-upload from GitHub Actions"
-}
+    "previewfile" "/home/snek/ci-pipeline/actions-runner/_work/DeltaV/DeltaV/deltaV.png"
+    \"changenote\"       \"1.0 Push"
