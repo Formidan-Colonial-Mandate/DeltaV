@@ -5,8 +5,6 @@ RENAME_MAP = {
     'includeRCS': 'i',
     'displayBurnTimes': 'b',
     'showAllDirections': 'd',
-    'showHeaderAndSettings': 'h',
-    'showBorders': 's',
     'controller': 'c',
     'statusLog': 'l',
     'groupNames': 'g',
