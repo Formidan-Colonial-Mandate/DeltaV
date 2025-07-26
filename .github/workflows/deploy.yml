@@ -16,7 +16,7 @@ jobs:
     - name: Minify Script
       run: |
         mkdir -p dist
-        python3 minify.py DeltaV.cs dist/DeltaV.min.cs
+        python3 minify.py DeltaV.cs dist/DeltaV.cs
 
     - name: Copy workshop_build.vdf
       run: |
@@ -25,4 +25,4 @@ jobs:
     - name: Upload to Steam Workshop via SteamCMD (cached session)
       run: |
         cd ~/steamcmd
-        ./steamcmd.sh +workshop_build_item $GITHUB_WORKSPACE/dist/workshop_build.vdf +quit
+        ./steamcmd.sh +runscript ~/steamcmd/login.txt

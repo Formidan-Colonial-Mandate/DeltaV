@@ -2,6 +2,7 @@
 {
     \"appid\"            \"244850\"
     \"publishedfileid\"  \"3531572919\"
-    \"contentfolder\"    \"./dist\" 
-    \"changenote\"       \"Auto-deploy from GitHub.\"
+    "contentfolder" "/home/snek/ci-pipeline/actions-runner/_work/DeltaV/DeltaV/dist"
+    "previewfile" "/home/snek/ci-pipeline/actions-runner/_work/DeltaV/DeltaV/deltaV.png"
+    \"changenote\"       \"1.0 Push
 }
