@@ -1,32 +1,65 @@
 import re
-import sys
+
+# Optional: variable renaming map (shorten internal symbols)
+RENAME_MAP = {
+    'includeRCS': 'i',
+    'displayBurnTimes': 'b',
+    'showAllDirections': 'd',
+    'showHeaderAndSettings': 'h',
+    'showBorders': 's',
+    'controller': 'c',
+    'statusLog': 'l',
+    'groupNames': 'g',
+    'booting': 'u',
+    'bootFrame': 'f',
+    'bootMsg': 'm',
+    'allThrusters': 't',
+    'tanks': 'k',
+    'allGroups': 'q',
+    'HYDROGEN_DENSITY_KG_PER_L': 'H',
+    'fuelUsageLpsBySubtypeId': 'F',
+    'rcsSubtypes': 'R',
+    'lcd': 'x',
+}
+
+def rename_vars(code):
+    for k, v in RENAME_MAP.items():
+        code = re.sub(r'\b' + re.escape(k) + r'\b', v, code)
+    return code
 
 def minify_script(code):
-    # Remove multiline comments
-    code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+    code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)  # multiline comments
+    code = re.sub(r'//.*', '', code)                        # single line comments
 
-    # Remove single-line comments, but keep newline
-    code = re.sub(r'//.*', '', code)
+    # preserve strings
+    strings = {}
+    def save_string(m):
+        key = f"__STR{len(strings)}__"
+        strings[key] = m.group(0)
+        return key
+    code = re.sub(r'\"(?:\\.|[^"\\])*\"', save_string, code)
 
-    # Collapse multiple spaces to one (per line)
-    lines = []
-    for line in code.splitlines():
-        if '"' in line:  # crude check for strings, don't collapse those
-            lines.append(line)
-        else:
-            lines.append(re.sub(r'\s+', ' ', line).rstrip())
+    # smash whitespace
+    code = re.sub(r'\s+', ' ', code)
+    code = re.sub(r'\s*([=+\-*/<>!&|%^]+)\s*', r'\1', code)
+    code = re.sub(r'\s*([{}()\[\],;])\s*', r'\1', code)
+    code = re.sub(r';+', ';', code)
 
-    return '\n'.join(lines)
+    # restore strings
+    for k, v in strings.items():
+        code = code.replace(k, v)
+
+    code = rename_vars(code)
+    return code.strip()
 
 if __name__ == "__main__":
+    import sys
     if len(sys.argv) != 3:
         print("Usage: python minify.py input.cs output.cs")
         sys.exit(1)
 
-    with open(sys.argv[1], 'r') as infile:
-        original = infile.read()
-
+    with open(sys.argv[1], 'r') as f:
+        original = f.read()
     minified = minify_script(original)
-
-    with open(sys.argv[2], 'w') as outfile:
-        outfile.write(minified)
+    with open(sys.argv[2], 'w') as f:
+        f.write(minified)
