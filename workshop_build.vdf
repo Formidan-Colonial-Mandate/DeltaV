@@ -1,7 +1,7 @@
-\"workshopitem\"
+"workshopitem"
 {
-    \"appid\"            \"244850\"                       
-    \"publishedfileid\"  \"3531572919\"       
-    \"contentfolder\"    \"./dist\"                             
-    \"changenote\"       \"Auto-deploy from GitHub.\"
+    "appid" "244850"
+    "publishedfileid" "123456789012345678"
+    "contentfolder" "dist"
+    "changenote" "Auto-upload from GitHub Actions"
 }
