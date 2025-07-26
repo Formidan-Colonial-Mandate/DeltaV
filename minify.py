@@ -2,20 +2,21 @@ import re
 import sys
 
 def minify_script(code):
-    # Remove multiline comments /* ... */
+    # Remove multiline comments
     code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
 
-    # Split into string and non-string parts
-    parts = re.split(r'(".*?(?<!\\\\)")', code)
+    # Remove single-line comments, but keep newline
+    code = re.sub(r'//.*', '', code)
 
-    # Process only non-string parts
-    for i in range(0, len(parts), 2):
-        # Remove single-line comments
-        parts[i] = re.sub(r'//.*', '', parts[i])
-        # Collapse multiple spaces but preserve spacing around operators
-        parts[i] = re.sub(r'\s+', ' ', parts[i])
+    # Collapse multiple spaces to one (per line)
+    lines = []
+    for line in code.splitlines():
+        if '"' in line:  # crude check for strings, don't collapse those
+            lines.append(line)
+        else:
+            lines.append(re.sub(r'\s+', ' ', line).rstrip())
 
-    return ''.join(parts)
+    return '\n'.join(lines)
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
