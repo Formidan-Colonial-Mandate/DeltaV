@@ -123,6 +123,7 @@ HashSet<string> rcsSubtypes = new HashSet<string>(
 
 Dictionary<string, double> fuelUsageLpsBySubtypeId = new Dictionary<string, double>
 {
+    // Large Grid
     { "ARYLYNX_SILVERSMITH_DRIVE", 1560 },
     { "ARYLNX_QUADRA_Epstein_Drive", 521.74 },
     { "LargeBlockLargeHydrogenThrust", 2000 },
@@ -152,6 +153,35 @@ Dictionary<string, double> fuelUsageLpsBySubtypeId = new Dictionary<string, doub
     { "RCS2SlopeTip2", 227.27 },
     { "RCS21x2Slope1", 227.27 },
     { "RCS21x2Slope2", 227.27 },
+    { "LargeBlockLargeAtmosphericThrust", 249.23 },
+    { "LargeBlockLargeAtmosphericThrustSciFi", 249.23 },
+    { "LargeBlockSmallAtmosphericThrust", 29.45 },
+    { "LargeBlockSmallAtmosphericThrustSciFi", 29.45 },
+    { "AtmosphericThrusterLarge_SciFiForced", 72 },
+    
+    // Small Grid
+    { "ARYLNX_RZB_Epstein_Drive", 160 },
+    { "ARYXLNX_YACHT_EPSTEIN_DRIVE", 100 },
+    { "AryxRCSThruster", 30 },
+    { "AryxRCSRamp_S", 30 },
+    { "AryxRCSHalfRamp_S", 30 },
+    { "AryxRCSSlant_S", 30 },
+    { "AryxRCS_S", 30 },
+    { "RcsSmallBarev2", 27.27 },
+    { "RcsSmallCubev2", 27.27 },
+    { "RcsSmallHalfv2", 27.27 },
+    { "RcsSmallSlopev2", 27.27 },
+    { "RcsSmallSlope1x2BaseVar1v2", 27.27 },
+    { "RcsSmallSlope1x2BaseVar2v2", 27.27 },
+    { "RetractableThrusterAltSG", 58.33 },
+    { "RetractableThrusterSG2", 58.33 },
+    { "Small3x3Thruster", 60 },
+    { "Small3x3ThrusterNoShroud", 60 },
+    { "SmallBlockLargeAtmosphericThrust", 52.27 },
+    { "SmallBlockLargeAtmosphericThrustSciFi", 52.27 },
+    { "SmallBlockSmallAtmosphericThrust", 5.33 },
+    { "SmallBlockSmallAtmosphericThrustSciFi", 5.33 },
+    { "AtmosphericThrusterSmall_SciFiForced", 13.71 },
 };
 
 enum BoxLineType
