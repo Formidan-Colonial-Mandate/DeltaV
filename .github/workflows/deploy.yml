@@ -27,6 +27,10 @@ jobs:
         mkdir -p dist
         python3 minify.py DeltaV.cs dist/DeltaVFullMinified.cs
 
+    - name: Move minified file to root
+      run: |
+        cp dist/DeltaVFullMinified.cs ./DeltaVFullMinified.cs
+
     - name: Copy workshop_build.vdf
       run: |
         cp workshop_build.vdf dist/
@@ -40,7 +44,7 @@ jobs:
       run: |
         git config user.name "DeltaV AutoPush"
         git config user.email "autopush@arsnek.net"
-        git add dist/DeltaVFullMinified.cs
+        git add DeltaVFullMinified.cs
     
         if git diff --cached --quiet; then
           echo "No changes to commit."
