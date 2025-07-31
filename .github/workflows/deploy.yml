@@ -9,7 +9,19 @@ jobs:
   deploy:
     runs-on: [self-hosted]
 
-    steps:
+    steps:    
+    - name: Get GitHub App token
+      id: get_app_token
+      uses: peter-murray/workflow-application-token-action@v3
+      with:
+        application_id: ${{ vars.AUTOCOMMIT_APP_ID }}
+        application_private_key: ${{ secrets.GH_APP_PRIVATE_KEY_B64 }}
+        
+    - name: Checkout repo using GitHub App token
+      uses: actions/checkout@v3
+      with:
+        token: ${{ steps.get_app_token.outputs.token }}
+        
     - name: Checkout Repo
       uses: actions/checkout@v3
       with:
@@ -29,42 +41,14 @@ jobs:
         cd ~/steamcmd
         ./steamcmd.sh +runscript ~/steamcmd/login.txt
 
-    - name: Authenticate GitHub App and export token
-      id: auth
-      env:
-        APP_ID: ${{ secrets.GH_APP_ID }}
-        INSTALLATION_ID: ${{ secrets.GH_INSTALLATION_ID }}
-        PRIVATE_KEY_B64: ${{ secrets.GH_APP_PRIVATE_KEY_B64 }}
-      run: |
-        echo "$PRIVATE_KEY_B64" | base64 -d > app.key
-    
-        iat=$(date +%s)
-        exp=$((iat + 540))
-
-        header='{"alg":"RS256","typ":"JWT"}'
-        payload="{\"iat\":$iat,\"exp\":$exp,\"iss\":$APP_ID}"
-        header_b64=$(echo -n "$header" | openssl base64 -A | tr '+/' '-_' | tr -d '=')
-        payload_b64=$(echo -n "$payload" | openssl base64 -A | tr '+/' '-_' | tr -d '=')
-        signature=$(echo -n "$header_b64.$payload_b64" | openssl dgst -sha256 -sign app.key | openssl base64 -A | tr '+/' '-_' | tr -d '=')
-        jwt="$header_b64.$payload_b64.$signature"
-
-        token=$(curl -s -X POST \
-          -H "Authorization: Bearer $jwt" \
-          -H "Accept: application/vnd.github+json" \
-          https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens | jq -r .token)
-    
-        echo "::add-mask::$token"
-        echo "GITHUB_TOKEN=$token" >> $GITHUB_ENV
-
-    - name: Commit minified version to main
+    - name: Commit and push minified file to main
       run: |
         git config user.name "DeltaV AutoPush"
-        git config user.email "autopush@arsnek.com"
-        git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/arsnekfcn/DeltaV.git
+        git config user.email "autopush@arsnek.net"
         git add dist/DeltaVFullMinified.cs
+
         if git diff --cached --quiet; then
           echo "No changes to commit."
         else
           git commit -m "Auto-update: pushed new minified Delta-V script [skip ci]"
-          git push origin main --force
-        fi
+          git push
