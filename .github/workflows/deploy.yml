@@ -41,9 +41,10 @@ jobs:
         git config user.name "DeltaV AutoPush"
         git config user.email "autopush@arsnek.net"
         git add dist/DeltaVFullMinified.cs
-
+    
         if git diff --cached --quiet; then
           echo "No changes to commit."
         else
           git commit -m "Auto-update: pushed new minified Delta-V script [skip ci]"
           git push
+
