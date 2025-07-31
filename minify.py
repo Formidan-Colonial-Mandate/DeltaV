@@ -56,8 +56,8 @@ if __name__ == "__main__":
         print("Usage: python minify.py input.cs output.cs")
         sys.exit(1)
 
-    with open(sys.argv[1], 'r') as f:
+    with open(sys.argv[1], 'r', encoding="utf-8") as f:
         original = f.read()
     minified = minify_script(original)
-    with open(sys.argv[2], 'w') as f:
+    with open(sys.argv[2], 'w', encoding="utf-8") as f:
         f.write(minified)
