@@ -9,28 +9,23 @@ jobs:
   deploy:
     runs-on: [self-hosted]
 
-    steps:    
+    steps:
     - name: Get GitHub App token
       id: get_app_token
       uses: peter-murray/workflow-application-token-action@v3
       with:
         application_id: ${{ vars.AUTOCOMMIT_APP_ID }}
         application_private_key: ${{ secrets.GH_APP_PRIVATE_KEY_B64 }}
-        
+
     - name: Checkout repo using GitHub App token
       uses: actions/checkout@v3
       with:
         token: ${{ steps.get_app_token.outputs.token }}
-        
-    - name: Checkout Repo
-      uses: actions/checkout@v3
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Minify Script
       run: |
         mkdir -p dist
-        python3 minify.py DeltaV.cs dist/DeltaVFullMinified.cs
+        python3 minify.py DeltaV.cs > dist/DeltaVFullMinified.cs
 
     - name: Copy workshop_build.vdf
       run: |
