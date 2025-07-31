@@ -47,4 +47,3 @@ jobs:
         else
           git commit -m "Auto-update: pushed new minified Delta-V script [skip ci]"
           git push
-
