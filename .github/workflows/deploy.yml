@@ -25,7 +25,7 @@ jobs:
     - name: Minify Script
       run: |
         mkdir -p dist
-        python3 minify.py DeltaV.cs > dist/DeltaVFullMinified.cs
+        python3 minify.py DeltaV.cs dist/DeltaVFullMinified.cs
 
     - name: Copy workshop_build.vdf
       run: |
