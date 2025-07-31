@@ -10,13 +10,26 @@ jobs:
     runs-on: [self-hosted]
 
     steps:
-    - name: Checkout Repo
+    - name: Get GitHub App token
+      id: get_app_token
+      uses: peter-murray/workflow-application-token-action@v3
+      with:
+        application_id: ${{ vars.AUTOCOMMIT_APP_ID }}
+        application_private_key: ${{ secrets.GH_APP_PRIVATE_KEY_B64 }}
+
+    - name: Checkout repo using GitHub App token
       uses: actions/checkout@v3
+      with:
+        token: ${{ steps.get_app_token.outputs.token }}
 
     - name: Minify Script
       run: |
         mkdir -p dist
-        python3 minify.py DeltaV.cs dist/DeltaV.cs
+        python3 minify.py DeltaV.cs dist/DeltaVFullMinified.cs
+
+    - name: Move minified file to root
+      run: |
+        cp dist/DeltaVFullMinified.cs ./DeltaVFullMinified.cs
 
     - name: Copy workshop_build.vdf
       run: |
@@ -26,3 +39,16 @@ jobs:
       run: |
         cd ~/steamcmd
         ./steamcmd.sh +runscript ~/steamcmd/login.txt
+
+    - name: Commit and push minified file to main
+      run: |
+        git config user.name "DeltaV AutoPush"
+        git config user.email "autopush@arsnek.net"
+        git add DeltaVFullMinified.cs
+    
+        if git diff --cached --quiet; then
+          echo "No changes to commit."
+        else
+          git commit -m "Auto-update: pushed new minified Delta-V script [skip ci]"
+          git push
+        fi
