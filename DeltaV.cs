@@ -182,6 +182,10 @@ Dictionary<string, double> fuelUsageLpsBySubtypeId = new Dictionary<string, doub
     { "SmallBlockSmallAtmosphericThrust", 5.33 },
     { "SmallBlockSmallAtmosphericThrustSciFi", 5.33 },
     { "AtmosphericThrusterSmall_SciFiForced", 13.71 },
+    { "SmallBlockLargeHydrogenThrust", 106.67 },
+    { "SmallBlockSmallHydrogenThrust", 44.44 },
+    { "SmallBlockLargeHydrogenThrustIndustrial", 106.67 },
+    { "SmallBlockSmallHydrogenThrustIndustrial", 44.44 },
 };
 
 enum BoxLineType
