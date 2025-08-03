@@ -802,10 +802,6 @@ void RenderBurnTimes(StringBuilder sb, double fuelMass, int boxWidth)
 
         thrustByDir[thrustingToward] += thruster.MaxEffectiveThrust;
         fuelByDir[thrustingToward] += lps;
-
-
-
-
     }
 
     foreach (var kvp in fuelByDir)
