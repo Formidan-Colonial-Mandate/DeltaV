@@ -792,12 +792,17 @@ void RenderBurnTimes(StringBuilder sb, double fuelMass, int boxWidth)
         if (rcsSubtypes.Contains(subtype) && !includeRCS)
             continue;
 
-        var dir = Base6Directions.GetFlippedDirection(thruster.Orientation.Forward);
-        if (!showAllDirections && dir != controller.Orientation.Forward)
+        Base6Directions.Direction cockpitForward = Base6Directions.GetClosestDirection(controller.WorldMatrix.Forward);
+        Base6Directions.Direction thrustDir = thruster.Orientation.Forward;
+        Base6Directions.Direction gridDir = thruster.Orientation.TransformDirection(thrustDir);
+        Base6Directions.Direction thrustingToward = Base6Directions.GetFlippedDirection(gridDir);
+
+        if (!showAllDirections && thrustingToward != cockpitForward)
             continue;
 
-        thrustByDir[dir] += thruster.MaxEffectiveThrust;
-        fuelByDir[dir] += lps;
+
+        thrustByDir[thrustingToward] += thruster.MaxEffectiveThrust;
+        fuelByDir[thrustingToward] += lps;
     }
 
     foreach (var kvp in fuelByDir)
