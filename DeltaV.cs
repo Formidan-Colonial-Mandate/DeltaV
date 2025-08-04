@@ -186,10 +186,6 @@ Dictionary<string, double> fuelUsageLpsBySubtypeId = new Dictionary<string, doub
     { "SmallBlockSmallHydrogenThrust", 44.44 },
     { "SmallBlockLargeHydrogenThrustIndustrial", 106.67 },
     { "SmallBlockSmallHydrogenThrustIndustrial", 44.44 },
-
-
-
-
 };
 
 enum BoxLineType
@@ -800,12 +796,16 @@ void RenderBurnTimes(StringBuilder sb, double fuelMass, int boxWidth)
         if (rcsSubtypes.Contains(subtype) && !includeRCS)
             continue;
 
-        var dir = Base6Directions.GetFlippedDirection(thruster.Orientation.Forward);
-        if (!showAllDirections && dir != controller.Orientation.Forward)
+        Base6Directions.Direction gridForward = controller.Orientation.Forward;
+        Base6Directions.Direction thrustingToward = Base6Directions.GetFlippedDirection(
+            Base6Directions.GetDirection(thruster.GridThrustDirection)
+        );
+
+        if (!showAllDirections && thrustingToward != gridForward)
             continue;
 
-        thrustByDir[dir] += thruster.MaxEffectiveThrust;
-        fuelByDir[dir] += lps;
+        thrustByDir[thrustingToward] += thruster.MaxEffectiveThrust;
+        fuelByDir[thrustingToward] += lps;
     }
 
     foreach (var kvp in fuelByDir)
