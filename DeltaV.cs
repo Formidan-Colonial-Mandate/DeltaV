@@ -31,7 +31,7 @@ List<string> groupNames = new List<string>();
 StringBuilder statusLog = new StringBuilder();
 
 // Constants
-const double HYDROGEN_DENSITY_KG_PER_L = 0.01;
+const double HYDROGEN_DENSITY_KG_PER_L = 10 * (2.0 / 18.0) / 10;
 
 // Runtime settings
 bool showBorders = true;
